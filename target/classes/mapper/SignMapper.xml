@@ -1,0 +1,348 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.mycompany.myapp.SignDao">
+
+    <resultMap id="memberResultMap" type="com.mycompany.myapp.MemberDto">
+        <!-- DB의 컬럼명과 MemberDto의 필드를 매핑 -->
+        <result property="seq" column="SEQ"/>
+        <result property="id" column="ID"/>
+        <result property="pw" column="PW"/>
+        <result property="name" column="NAME"/>
+        <result property="rank" column="RANK"/>
+    </resultMap>
+    
+    <resultMap id="boardResultMap" type="com.mycompany.myapp.BoardDto">
+	    <id property="seq" column="SEQ"/>
+	    <result property="name" column="NAME"/>
+	    <result property="id" column="ID"/>
+	    <result property="subject" column="SUBJECT"/>
+	    <result property="content" column="CONTENT"/>
+	    <result property="regDate" column="REG_DATE"/>
+	    <result property="signDate" column="SIGN_DATE"/>
+	    <result property="signer" column="SIGNER"/>
+	    <result property="signStatus" column="SIGN_STATUS"/>
+	    <result property="apperId" column="APPER_ID"/>
+	</resultMap>
+	
+	<resultMap id="HistoryResultMap" type="com.mycompany.myapp.HistoryDto">
+    <result column="seq" property="seq" />
+    <result column="sign_date" property="signDate" />
+    <result column="signer" property="signer" />
+    <result column="sign_status" property="signStatus" />
+    <result column="board_seq" property="boardSeq" />
+    <result column="history_seq" property="historySeq" />
+    <result column="apper_id" property="apperId" />
+	</resultMap>
+	
+	<!-- 검색 조건 -->
+	<sql id="search">
+	    <if test="searchOption == '제목/내용' and searchKeyword != null">
+	        AND SUBJECT LIKE '%' || #{searchKeyword} || '%'
+	    </if>
+	    <if test="searchStatus == '임시저장' and searchKeyword != null">
+	        AND SIGN_STATUS LIKE '%' || #{searchKeyword} || '%'
+	    </if>
+	    <if test="searchStatus == '결재요청' and searchKeyword != null">
+	        AND SIGN_STATUS LIKE '%' || #{searchKeyword} || '%'
+	    </if>
+	    <if test="searchStatus == '결재중' and searchKeyword != null">
+	        AND SIGN_STATUS LIKE '%' || #{searchKeyword} || '%'
+	    </if>
+	    <if test="searchStatus == '결재완료' and searchKeyword != null">
+	        AND SIGN_STATUS LIKE '%' || #{searchKeyword} || '%'
+	    </if>
+	    <if test="searchStatus == '반려' and searchKeyword != null">
+	        AND SIGN_STATUS LIKE '%' || #{searchKeyword} || '%'
+	    </if>
+		<if test="startDate != '' and startDate != null">
+		    AND TRUNC(REG_DATE) BETWEEN TO_DATE(#{startDate}, 'YYYY-MM-DD') AND TO_DATE(#{endDate}, 'YYYY-MM-DD')
+		</if>
+	</sql>
+	
+	
+	<!-- 결재 프로젝트 MAPPER -->
+	
+	<!-- 대리결재 리스트 출력 -->
+	<select id="selectDelegateList" parameterType="java.util.Map" resultType="com.mycompany.myapp.MemberDto">
+		SELECT m.SEQ, m.ID, m.PW, m.NAME, m.RANK
+		    FROM yeo_member m
+		    LEFT JOIN yeo_proxy p ON m.ID = p.PROXY_ID
+		    WHERE p.PROXY_ID IS NULL
+		    AND (
+		        (
+		            #{userRank} = '과장' AND m.RANK IN ('사원', '대리')
+		        )
+		        OR
+		        (
+		            #{userRank} = '부장' AND m.RANK IN ('대리', '과장')
+		        )
+		    )
+	</select>
+	
+	<select id="selectGetMemberRank" parameterType="java.lang.String" resultType="java.lang.String">
+        SELECT RANK
+        FROM yeo_member
+        WHERE ID = #{memberId}
+    </select>
+	
+	<!-- 대리결재 데이터 등록 -->
+	<insert id="selectDelegateInsert" parameterType="java.util.Map">
+	    INSERT INTO yeo_proxy (PROXY_ID, APPER_ID, PROXY_DATE)
+	    VALUES (#{proxyId, jdbcType=VARCHAR}, #{apperId, jdbcType=VARCHAR}, SYSDATE)
+	</insert>
+	
+	<!-- 대리결재 정보 -->
+	<select id="selectProxyInfo" resultType="java.util.Map" parameterType="java.lang.String">
+	    SELECT 
+	        p.PROXY_ID,
+	        p.APPER_ID,
+	        TO_CHAR(p.PROXY_DATE, 'YYYY/MM/DD HH24:MI:SS') AS PROXY_DATE,
+	        m.NAME AS APPER_NAME,
+	        m.RANK AS APPER_RANK
+	    FROM yeo_proxy p
+	    JOIN yeo_member m ON p.APPER_ID = m.ID
+	    WHERE p.PROXY_ID = #{userId}
+	</select>
+	
+    
+    <!-- 대리결재 권한 유효성 -->
+	<delete id="selectDeleteProxy" parameterType="String">
+	    DELETE FROM yeo_proxy WHERE PROXY_ID = #{userId}
+	</delete>
+    
+
+    <!-- 사용자 조회 -->
+	<select id="selectMemberByUserId" resultMap="memberResultMap">
+	    SELECT
+	        SEQ,
+	        ID,
+	        PW,
+	        NAME,
+	        RANK
+	    FROM yeo_member 
+	    WHERE ID = #{userid}
+	</select>
+	
+	<!-- 최대 SEQ 값을 조회 -->
+	<select id="getMaxSeq" resultType="java.lang.Integer">
+	    SELECT NVL(MAX(SEQ), 0) FROM yeo_board
+	</select>
+
+	<!-- 게시글 등록 -->
+	<insert id="selectInsert" parameterType="com.mycompany.myapp.BoardDto">
+	  <selectKey keyProperty="seq" resultType="int" order="BEFORE">
+	    SELECT NVL(MAX(SEQ), 0) + 1 FROM yeo_board
+	  </selectKey>
+	  INSERT INTO yeo_board (
+	    SEQ,
+	    ID,
+	    SUBJECT,
+	    CONTENT,
+	    REG_DATE,
+	    SIGN_STATUS,
+	    APPER_ID
+	  )
+	  VALUES (
+	    #{seq},
+	    #{id},
+	    #{subject},
+	    #{content},
+	    SYSDATE,
+	    #{signStatus},
+	    #{apperId, jdbcType=VARCHAR}
+	  )
+	</insert>
+
+	<!-- 게시글 수정 -->
+	<update id="selectUpdate" parameterType="java.util.Map">
+	    UPDATE yeo_board
+	    SET
+	        SUBJECT = #{board.subject},
+	        CONTENT = #{board.content},
+	        SIGN_DATE =
+	        <choose>
+	            <when test='userRank == "사원" or userRank == "대리"'>
+	                null
+	            </when>
+	            <otherwise>
+	                SYSDATE
+	            </otherwise>
+	        </choose>,
+	        SIGNER = #{board.signerId},
+	        SIGN_STATUS = #{board.signStatus},
+	        APPER_ID = #{board.apperId, jdbcType=VARCHAR}
+	    WHERE
+	        SEQ = #{board.seq}
+	</update>
+
+	<!-- 사용자 게시글 목록 -->
+	<select id="selectList" resultMap="boardResultMap" parameterType="java.util.Map">
+	    SELECT
+	        b.SEQ,
+	        b.ID,
+	        b.SUBJECT,
+	        b.CONTENT,
+	        b.REG_DATE,
+	        b.SIGN_DATE,
+	        b.SIGNER,
+	        CASE b.SIGN_STATUS
+	            WHEN 'SAVE' THEN '임시저장'
+	            WHEN 'APPROVE' THEN '결재요청'
+	            WHEN 'APPROVEWAIT' THEN '결재중'
+	            WHEN 'REJECT' THEN '반려'
+	            WHEN 'ACCEPT' THEN '결재완료'
+	            ELSE b.SIGN_STATUS
+	        END AS SIGN_STATUS,
+	        m1.NAME,
+	        m2.NAME signerName,
+	        (SELECT NAME FROM yeo_member WHERE ID = b.APPER_ID) apperName
+	    FROM yeo_board b
+	    INNER JOIN yeo_member m1 ON b.ID = m1.ID
+	    LEFT JOIN yeo_member m2 ON b.SIGNER = m2.ID
+	    WHERE
+	        b.id = #{userId}
+	        OR b.signer = #{userId}
+	        
+	        <choose>
+	            <!-- Additional conditions for '과장' -->
+	            <when test='APPER_RANK == "과장" and PROXY_DATE != null'>
+	                OR (b.SIGN_STATUS = 'APPROVE' OR b.SIGNER = #{APPER_ID})
+	                OR (b.SIGN_STATUS = '' OR b.SIGN_STATUS = 'APPROVE')
+	            </when>
+	            <when test='APPER_RANK == "과장" and PROXY_DATE == null'>
+	                OR (b.SIGN_STATUS = '' OR b.SIGN_STATUS = 'APPROVE')
+	            </when>
+	            
+	            <!-- Additional conditions for '부장' -->
+	            <when test='APPER_RANK == "부장" and PROXY_DATE != null'>
+	                OR (b.SIGN_STATUS = 'APPROVEWAIT' OR b.SIGNER = #{APPER_ID})
+	                OR (b.SIGN_STATUS = '' OR b.SIGN_STATUS = 'APPROVEWAIT')
+	            </when>
+	            <when test='APPER_RANK == "부장" and PROXY_DATE == null'>
+	                OR (b.SIGN_STATUS = '' OR b.SIGN_STATUS = 'APPROVEWAIT')
+	            </when>
+	        </choose>
+	
+	        <!-- User rank conditions -->
+	        <if test='(userRank == "과장" or userRank == "부장") and (APPER_RANK == null or PROXY_DATE == null)'>
+	            OR (b.SIGN_STATUS = '' OR b.SIGN_STATUS <if test='userRank == "과장"'>= 'APPROVE'</if><if test='userRank == "부장"'>= 'APPROVEWAIT'</if>)
+	        </if>
+	
+	    ORDER BY b.SEQ DESC
+	</select>
+	
+<!-- 사용자 게시글 상세 조회 -->
+<select id="selectDetail" resultMap="boardResultMap" parameterType="int" resultType="com.mycompany.myapp.BoardDto">
+    SELECT
+        b.SEQ,
+        b.ID,
+        b.SUBJECT,
+        b.CONTENT,
+        b.REG_DATE,
+        b.SIGN_DATE,
+        b.SIGNER,
+        b.SIGN_STATUS,
+        b.APPER_ID,
+        m.NAME,
+        (SELECT NAME FROM yeo_member WHERE ID = b.APPER_ID) AS apperName
+    FROM yeo_board b
+    JOIN yeo_member m ON b.ID = m.ID
+    WHERE b.SEQ = #{seq}
+</select>
+
+	
+	<!-- 게시글 검색 -->
+	<select id="selectSearch" resultMap="boardResultMap" resultType="com.mycompany.myapp.BoardDto" parameterType="map">
+	    SELECT
+	        b.SEQ,
+	        b.ID,
+	        b.SUBJECT,
+	        b.CONTENT,
+	        b.REG_DATE,
+	        b.SIGN_DATE,
+	        b.SIGNER,
+	        CASE b.SIGN_STATUS
+	            WHEN 'SAVE' THEN '임시저장'
+	            WHEN 'APPROVE' THEN '결재요청'
+	            WHEN 'APPROVEWAIT' THEN '결재중'
+	            WHEN 'REJECT' THEN '반려'
+	            WHEN 'ACCEPT' THEN '결재완료'
+	            ELSE b.SIGN_STATUS
+	        END AS SIGN_STATUS,
+	        m1.NAME,
+	        m2.NAME AS signerName
+	    FROM yeo_board b
+	    INNER JOIN yeo_member m1 ON b.ID = m1.ID
+	    LEFT JOIN yeo_member m2 ON b.SIGNER = m2.ID
+	    WHERE 1=1
+	    <if test="userId != null and userId != ''">
+	        AND (
+	            b.ID = #{userId}
+	            OR b.signer = #{userId}
+	            
+	            <if test='userRank == "과장"'>
+	                OR (b.SIGN_STATUS = '' OR b.SIGN_STATUS = 'APPROVE')
+	            </if>
+	            <if test='userRank == "부장"'>
+	                OR (b.SIGN_STATUS = '' OR b.SIGN_STATUS = 'APPROVEWAIT')
+	            </if>
+	        )
+	    </if>
+	    <include refid="search" />
+	    <if test="searchOption == '작성자' and searchKeyword != null">
+	        AND m1.NAME LIKE '%' || #{searchKeyword} || '%'
+	    </if>
+	    	    <if test="searchOption == '결재자' and searchKeyword != null">
+	        AND m2.NAME LIKE '%' || #{searchKeyword} || '%'
+	    </if>
+	    ORDER BY b.SEQ DESC
+	</select>
+
+	<!-- 게시글 등록 시 결재내역 히스토리 -->
+	<insert id="selectHistoryInsert" parameterType="com.mycompany.myapp.BoardDto">
+	    INSERT INTO yeo_history (
+	      SEQ, 
+	      SIGN_DATE, 
+	      SIGNER, 
+	      SIGN_STATUS, 
+	      BOARD_SEQ, 
+	      HISTORY_SEQ, 
+	      APPER_ID
+	    )
+	    VALUES (
+	      (SELECT COALESCE(MAX(SEQ), 0) + 1 FROM yeo_history),
+	      SYSDATE,
+	      #{signerId},
+	      #{signStatus},
+	      #{seq},
+	      (SELECT COALESCE(MAX(history_seq), 0) + 1 FROM yeo_history WHERE board_seq = #{seq}),
+	      #{apperId, jdbcType=VARCHAR}
+	    )
+	</insert>
+
+	<!-- 상세 조회 시 결재내역 히스토리 목록 -->
+	<select id="selectHistoryList" resultMap="HistoryResultMap" parameterType="int" resultType="com.mycompany.myapp.HistoryDto">
+	SELECT 
+	    H.SEQ,
+	    H.SIGN_DATE,
+	    H.SIGNER,
+	    CASE H.SIGN_STATUS
+	        WHEN 'SAVE' THEN '임시저장'
+	        WHEN 'APPROVE' THEN '결재요청'
+	        WHEN 'APPROVEWAIT' THEN '결재중'
+	        WHEN 'REJECT' THEN '반려'
+	        WHEN 'ACCEPT' THEN '결재완료'
+	        ELSE H.SIGN_STATUS
+	    END AS SIGN_STATUS,
+	    H.BOARD_SEQ,
+	    H.HISTORY_SEQ,
+	    M.NAME,
+	    (SELECT NAME FROM yeo_member WHERE ID = H.APPER_ID) apperName
+	FROM yeo_history H
+	JOIN yeo_member M ON H.SIGNER = M.ID
+	WHERE H.BOARD_SEQ = #{boardSeq}
+	ORDER BY H.HISTORY_SEQ ASC
+	</select>
+
+</mapper>

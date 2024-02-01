@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:mybatis-spring="http://mybatis.org/schema/mybatis-spring"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+           http://www.springframework.org/schema/beans/spring-beans.xsd
+           http://www.springframework.org/schema/context
+           http://www.springframework.org/schema/context/spring-context.xsd">
+
+
+	<!-- jdbc -->
+	<bean id="transactionManager"
+		class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+		<property name="dataSource" ref="dataSource" />
+	</bean>
+   
+   <!-- Root Context: defines shared resources visible to all other web components -->
+   <bean id="dataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource" lazy-init="false">
+       <property name="driverClassName" value="oracle.jdbc.driver.OracleDriver" />
+       <property name="url" value="jdbc:oracle:thin:@121.140.42.227:1521:xe" />
+       <property name="username" value="giantstudy" />
+       <property name="password" value="gs123"/>
+   </bean>
+   
+   <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+       <property name="dataSource" ref="dataSource"/>
+       <property name="mapperLocations" value="classpath*:mapper/*.xml"/>
+   </bean>
+   <bean id="sqlSession" class="org.mybatis.spring.SqlSessionTemplate">
+       <constructor-arg index="0" ref="sqlSessionFactory" />
+   </bean>
+   <context:component-scan base-package="com.mycompany.myapp"/>
+   <bean id="boardListDao" class="com.mycompany.myapp.BoardListDao" />
+	<bean id="signService" class="com.mycompany.myapp.SignServiceImpl" />
+
+
+   
+</beans>

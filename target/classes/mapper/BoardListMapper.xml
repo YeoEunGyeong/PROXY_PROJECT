@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.mycompany.myapp.BoardListDao">
+	<!-- 검색어, 검색 날짜 조건 -->
+	<sql id="search">
+	    <if test="searchBar == '제목' and search != null">
+	        AND BOARD_SUBJECT LIKE '%' || #{search} || '%'
+	    </if>
+	    <if test="searchBar == 'ID' and search != null">
+	        AND MEM_NAME LIKE '%' || #{search} || '%'
+	    </if>
+		<if test="startDate != '' and startDate != null">
+		    AND REG_DATE BETWEEN TO_DATE(#{startDate}, 'MM/DD/YYYY') AND TO_DATE(#{endDate}, 'MM/DD/YYYY')
+		</if>
+
+	</sql>
+	
+	<!-- boardList 전체 테이블 조회 (페이징 추가) -->
+	<select id="selectBoardList"
+	    resultType="com.mycompany.myapp.BoardListDto" parameterType="map">
+	    <![CDATA[
+	    SELECT
+	        SEQ,
+	        MEM_NAME,
+	        MEM_ID,
+	        BOARD_SUBJECT,
+	        BOARD_CONTENT,
+	        REG_DATE,
+	        UPT_DATE,
+	        VIEW_CNT,
+	        USEYN
+	    FROM (
+	        SELECT
+	            ROW_NUMBER() OVER(ORDER BY SEQ DESC) RN
+	            ,SEQ
+	            ,MEM_NAME
+	            ,MEM_ID
+	            ,BOARD_SUBJECT
+	            ,BOARD_CONTENT
+	            ,REG_DATE
+	            ,UPT_DATE
+	            ,VIEW_CNT
+	            ,USEYN
+	        FROM BOARD_STUDY
+	    ) TEMP
+	    WHERE RN BETWEEN #{startNo} AND #{endNo}
+	    ORDER BY SEQ DESC
+	    ]]>
+	</select>
+		
+	<!-- boardExcel 전체 테이블 조회 -->
+	<select id="selectBoardExcelList"
+	    resultType="java.util.Map" parameterType="map">
+	    SELECT
+	        SEQ,
+	        MEM_NAME,
+	        MEM_ID,
+	        BOARD_SUBJECT,
+	        BOARD_CONTENT,
+	        REG_DATE,
+	        UPT_DATE,
+	        VIEW_CNT,
+	        USEYN
+	    FROM BOARD_STUDY
+	    ORDER BY SEQ DESC
+	</select>
+	
+	<!-- 넥사크로 게시글 출력 -->
+	<select id="nexamapper" resultType="java.util.Map" parameterType="map">
+	    SELECT
+	        SEQ,
+	        MEM_NAME,
+	        MEM_ID,
+	        BOARD_SUBJECT,
+	        BOARD_CONTENT,
+	        REG_DATE,
+	        UPT_DATE,
+	        VIEW_CNT,
+	        USEYN
+	    FROM BOARD_STUDY
+	    <where>
+	        <if test="searchTypeValue == 'subject' and searchKeywordValue != null">
+	            AND BOARD_SUBJECT LIKE '%' || #{searchKeywordValue} || '%'
+	        </if>
+	        <if test="searchTypeValue == 'content' and searchKeywordValue != null">
+	            AND BOARD_CONTENT LIKE '%' || #{searchKeywordValue} || '%'
+	        </if>
+	    </where>
+	    ORDER BY SEQ DESC
+	</select>
+
+
+		
+	<!-- writeForm 입력값 테이블 insert -->
+	<insert id="selectBoardInsert"
+		parameterType="com.mycompany.myapp.BoardListDto">
+		INSERT INTO board_study (
+		   SEQ,
+		   MEM_NAME,
+		   MEM_ID,
+		   BOARD_SUBJECT,
+		   BOARD_CONTENT,
+		   REG_DATE
+		)
+		VALUES (
+		   (SELECT NVL(MAX(SEQ), 0) + 1 FROM board_study),
+		   #{mem_name},
+		   #{mem_id},
+		   #{board_subject},
+		   #{board_content},
+		   SYSDATE
+		)
+	</insert>
+
+	<!-- 게시글 seq 가져오기 -->
+	<select id="listSeq" resultType="int">
+	 SELECT NVL(MAX(SEQ), 0)
+	 FROM board_study
+	</select>
+	
+	<!-- boardFileInsert -->
+	<insert id="boardFileInsert" parameterType="com.mycompany.myapp.BoardListDto">
+	    <selectKey keyProperty="file_seq" resultType="int" order="BEFORE">
+	        SELECT NVL(MAX(FILE_SEQ), 0) + 1 AS file_seq
+	        FROM file_study_table
+	    </selectKey>
+	    
+	    INSERT INTO file_study_table (
+	        FILE_SEQ,
+	        REAL_NAME,
+	        SAVE_NAME,
+	        REG_DATE,
+	        SAVE_PATH,
+	        LIST_SEQ
+	    ) VALUES (
+	        #{file_seq},
+	        #{real_name},
+	        #{save_name},
+	        SYSDATE,
+	        #{save_path},
+	        #{list_seq}
+	    )
+	</insert>
+	
+	<!-- boardSearch 전체 테이블에서 검색 조건 조회 (페이징 추가) -->
+	<select id="selectBoardSearch"
+	    resultType="com.mycompany.myapp.BoardListDto" parameterType="map">
+	    <![CDATA[
+	    SELECT
+	        SEQ,
+	        MEM_NAME,
+	        MEM_ID,
+	        BOARD_SUBJECT,
+	        BOARD_CONTENT,
+	        REG_DATE,
+	        UPT_DATE,
+	        VIEW_CNT,
+	        USEYN
+	    FROM (
+	        SELECT
+	            ROW_NUMBER() OVER(ORDER BY SEQ DESC) RN
+	            ,SEQ
+	            ,MEM_NAME
+	            ,MEM_ID
+	            ,BOARD_SUBJECT
+	            ,BOARD_CONTENT
+	            ,REG_DATE
+	            ,UPT_DATE
+	            ,VIEW_CNT
+	            ,USEYN
+	        FROM BOARD_STUDY
+	        WHERE 1=1
+	    ]]>
+	    <include refid="search"></include>
+	
+	    <![CDATA[
+	    ) TEMP
+	    WHERE RN BETWEEN #{startNo} AND #{endNo}
+	    ]]>
+	</select>
+
+	<!-- 게시글 목록 - 총 레코드 수 반환 -->
+	<select id="totalCountForList" resultType="int">
+	    SELECT COUNT(*) FROM board_study
+	</select>
+	
+	<!-- 게시글 검색 - 총 레코드 수 반환 -->
+	<select id="totalCountForSearch" parameterType="map" resultType="int">
+	    SELECT COUNT(*) FROM board_study
+	    WHERE
+	    1=1
+    	<include refid="search"></include>
+	</select>
+
+	<!-- boardDetail seq값과 일치하는 단일 행 조회 -->
+	<select id="selectBoardDetail" parameterType="int"
+		resultType="com.mycompany.myapp.BoardListDto">
+		SELECT
+			SEQ,
+			MEM_NAME,
+			MEM_ID,
+			BOARD_SUBJECT,
+			BOARD_CONTENT,
+			REG_DATE,
+			VIEW_CNT
+		FROM board_study
+		WHERE SEQ = #{seq}
+	</select>
+	
+	<!-- boardDetail seq값과 일치하는 단일 행 조회 -->
+	<select id="selectBoardFileDetail" parameterType="int"
+		resultType="com.mycompany.myapp.BoardListDto">
+	    SELECT
+	        FILE_SEQ,
+	        REAL_NAME,
+	        SAVE_NAME,
+	        REG_DATE,
+	        SAVE_PATH,
+	        LIST_SEQ
+	    FROM file_study_table
+	    WHERE LIST_SEQ = #{seq}
+	</select>
+
+	<!-- boardUpdate 입력값 테이블 update -->
+	<update id="selectBoardUpdate"
+		parameterType="com.mycompany.myapp.BoardListDto">
+		UPDATE board_study
+		SET MEM_NAME = #{mem_name},
+		BOARD_SUBJECT = #{board_subject},
+		BOARD_CONTENT = #{board_content}
+		WHERE SEQ = #{seq}
+	</update>
+
+
+	<!-- boardDelete 테이블 삭제 -->
+	<delete id="selectBoardDelete" parameterType="java.util.List">
+		DELETE FROM board_study
+		WHERE SEQ IN
+		<foreach collection="list" item="item" open="(" separator=","
+			close=")">
+			#{item}
+		</foreach>
+	</delete>
+</mapper>
